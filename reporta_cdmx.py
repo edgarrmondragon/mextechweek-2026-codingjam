@@ -361,11 +361,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             margin-bottom: 12px;
             display: block;
         }
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
         .btn-camera {
             background: var(--cdmx-wine);
             color: white;
             border: none;
-            padding: 12px 24px;
+            padding: 12px 22px;
             font-size: 0.95rem;
             font-weight: 600;
             border-radius: 10px;
@@ -373,10 +380,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            margin-top: 12px;
             transition: opacity 0.2s;
         }
-        .btn-camera:hover { opacity: 0.9; }
+        .btn-gallery {
+            background: #1e293b;
+            color: white;
+            border: none;
+            padding: 12px 22px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: opacity 0.2s;
+        }
+        .btn-camera:hover, .btn-gallery:hover { opacity: 0.9; }
         .btn-submit {
             background: var(--cdmx-green);
             color: white;
@@ -531,17 +551,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </header>
 
         <div class="card">
-            <div class="upload-area" id="dropArea" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-area" id="dropArea" onclick="document.getElementById('galleryInput').click()">
                 <span class="upload-icon">📸</span>
                 <h3>Toma una fotografía o sube una imagen</h3>
                 <p style="color: #64748b; font-size: 0.88rem; margin-top: 4px;">
-                    Fugas de agua, baches, luminarias rotas o tiraderos clandestinos
+                    Arrastra una foto aquí o elige una opción:
                 </p>
-                <button class="btn-camera" type="button">
-                    <span>📷 Abrir Cámara / Galería</span>
-                </button>
+                <div class="action-buttons" onclick="event.stopPropagation()">
+                    <button class="btn-camera" type="button" onclick="document.getElementById('cameraInput').click()">
+                        <span>📷 Tomar Foto</span>
+                    </button>
+                    <button class="btn-gallery" type="button" onclick="document.getElementById('galleryInput').click()">
+                        <span>🖼️ Elegir de Galería / Archivo</span>
+                    </button>
+                </div>
             </div>
-            <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;" onchange="handleFileSelect(event)">
+            <!-- Entrada con cámara directa en móviles -->
+            <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleFileSelect(event)">
+            <!-- Entrada estándar para biblioteca de fotos y selector de archivos -->
+            <input type="file" id="galleryInput" accept="image/*" style="display: none;" onchange="handleFileSelect(event)">
             
             <div class="quick-demos">
                 <span style="font-size: 0.78rem; font-weight: 600; color: #64748b;">Pruebas rápidas:</span>
@@ -617,8 +645,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <script>
         let currentImageBase64 = null;
 
-        function handleFileSelect(e) {
-            const file = e.target.files[0];
+        function processFile(file) {
             if (!file) return;
             const reader = new FileReader();
             reader.onload = function(event) {
@@ -626,9 +653,42 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 document.getElementById('previewImg').src = currentImageBase64;
                 document.getElementById('previewBox').style.display = 'block';
                 document.getElementById('btnSubmit').style.display = 'block';
+                document.getElementById('btnSubmit').scrollIntoView({ behavior: 'smooth' });
             };
             reader.readAsDataURL(file);
         }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            processFile(file);
+            e.target.value = ''; // Permite volver a seleccionar el mismo archivo si es necesario
+        }
+
+        // Soporte para arrastrar y soltar (Drag and Drop)
+        const dropArea = document.getElementById('dropArea');
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropArea.style.borderColor = 'var(--cdmx-green)';
+                dropArea.style.background = '#f0fdf4';
+            }, false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropArea.style.borderColor = '#cbd5e1';
+                dropArea.style.background = '#f8fafc';
+            }, false);
+        });
+        dropArea.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files && files.length > 0) {
+                processFile(files[0]);
+            }
+        }, false);
 
         async function submitAnalysis() {
             if (!currentImageBase64) return;
