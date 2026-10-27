@@ -192,8 +192,8 @@ def analyze_image_with_ai(image: Image.Image) -> SUACReport:
         image.save(buffered, format="JPEG")
         image_bytes = buffered.getvalue()
 
-        # Intentar con gemini-2.5-flash o gemini-2.0-flash
-        model_name = "gemini-2.5-flash"
+        # Modelo multimodal recomendado para la API de Gemini
+        model_name = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
         
         prompt = (
             "Analiza detalladamente esta fotografía tomada en una calle de la Ciudad de México. "
