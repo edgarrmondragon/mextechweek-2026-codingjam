@@ -1,6 +1,7 @@
 set dotenv-load
 
 service_name := "reporta-cdmx"
+project_id := "daring-pilot-512916-i3"
 default_region := "us-central1"
 
 # List available recipes
@@ -36,7 +37,7 @@ docker-run port="8000":
     docker run --rm -it -p {{port}}:{{port}} -e PORT={{port}} --env-file .env {{service_name}}
 
 # Deploy to Google Cloud Run (automatically sets GEMINI_API_KEY if present in .env/env)
-deploy region=default_region:
+deploy project=project_id region=default_region:
     #!/usr/bin/env bash
     set -euo pipefail
     EXTRA_FLAGS=()
@@ -44,6 +45,7 @@ deploy region=default_region:
         EXTRA_FLAGS=(--set-env-vars "GEMINI_API_KEY=${GEMINI_API_KEY}")
     fi
     gcloud run deploy {{service_name}} \
+        --project {{project}} \
         --source . \
         --region {{region}} \
         --allow-unauthenticated \
@@ -54,12 +56,12 @@ deploy region=default_region:
         "${EXTRA_FLAGS[@]}"
 
 # Stream logs from the deployed Cloud Run service
-logs region=default_region:
-    gcloud run services logs tail {{service_name}} --region={{region}}
+logs project=project_id region=default_region:
+    gcloud run services logs tail {{service_name}} --project={{project}} --region={{region}}
 
 # Show the public HTTPS URL of the deployed Cloud Run service
-url region=default_region:
-    @gcloud run services describe {{service_name}} --region={{region}} --format='value(status.url)'
+url project=project_id region=default_region:
+    @gcloud run services describe {{service_name}} --project={{project}} --region={{region}} --format='value(status.url)'
 
 # Clean temporary files, caches, and generated test tickets
 clean:
