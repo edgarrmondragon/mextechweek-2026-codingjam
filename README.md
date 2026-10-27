@@ -37,15 +37,15 @@ python reporta_cdmx.py
 
 ---
 
-## 🔑 Configuración de API (Opcional)
+## 🔑 Configuración con archivo `.env`
 
-Si deseas análisis multimodal en tiempo real con **Gemini 2.5 Flash**:
-```bash
-export GEMINI_API_KEY="tu-clave-aqui"
-uv run reporta_cdmx.py
+El script carga automáticamente tus variables desde el archivo `.env` en la raíz del proyecto:
+```ini
+GEMINI_API_KEY="tu-clave-aqui"
+# También soporta GOOGLE_API_KEY o GOOGLE_GENAI_API_KEY
 ```
 
-> **Nota para la demo:** Si **no** configuras `GEMINI_API_KEY`, el script entra automáticamente en **Modo Demostración / Fallback**, generando reportes realistas con folios y datos oficiales del catálogo de la CDMX para que nunca falle tu presentación.
+> **Nota para la demo:** Si **no** hay clave en el `.env`, el script entra automáticamente en **Modo Demostración / Fallback**, generando reportes realistas con folios y datos oficiales del catálogo de la CDMX para que nunca falle tu presentación.
 
 ---
 

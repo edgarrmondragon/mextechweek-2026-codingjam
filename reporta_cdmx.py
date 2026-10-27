@@ -4,6 +4,7 @@
 #     "google-genai>=1.0.0",
 #     "pillow>=10.0.0",
 #     "pydantic>=2.0.0",
+#     "python-dotenv>=1.0.0",
 #     "rich>=13.0.0",
 # ]
 # ///
@@ -44,6 +45,19 @@ from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+
+# Cargar variables de entorno desde .env
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    _env_path = Path(__file__).resolve().parent / ".env"
+    if _env_path.exists():
+        for _line in _env_path.read_text(encoding="utf-8").splitlines():
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip().strip("'\""))
 
 console = Console()
 
@@ -140,11 +154,18 @@ def generate_folio() -> str:
 
 def analyze_image_with_ai(image: Image.Image) -> SUACReport:
     """Analiza la imagen utilizando la API de Gemini (o modo de demostración si no hay clave)."""
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = (
+        os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY")
+        or os.environ.get("GOOGLE_GENAI_API_KEY")
+    )
+    if api_key:
+        os.environ["GEMINI_API_KEY"] = api_key
+        os.environ["GOOGLE_API_KEY"] = api_key
 
     if not api_key:
         # Modo Demostración realista con folio oficial
-        console.print("[yellow]⚠️  GEMINI_API_KEY no detectada. Generando reporte de demostración basado en el catálogo SUAC...[/yellow]")
+        console.print("[yellow]⚠️  GEMINI_API_KEY no detectada en .env ni entorno. Generando reporte de demostración...[/yellow]")
         template = random.choice(SAMPLE_REPORTS)
         folio = generate_folio()
         return SUACReport(
