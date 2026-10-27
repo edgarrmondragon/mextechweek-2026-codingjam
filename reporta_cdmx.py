@@ -106,9 +106,16 @@ SYSTEM_PROMPT = """Eres el Inspector de Infraestructura Urbana con IA para el SU
 
 Tu tarea es analizar la fotografía enviada por el ciudadano y clasificar el problema urbano:
 1. Mapea el incidente al catálogo oficial del Gobierno de la CDMX (SACMEX para fugas/drenaje,
-   SOBSE para avenidas primarias/puentes, Alcaldías para vías secundarias/basura/luminarias locales).
+   SOBSE para avenidas primarias/puentes, Alcaldías para vías secundarias/baches/basura/luminarias locales).
 2. Evalúa objetivamente la severidad y el riesgo civil.
 3. Redacta una descripción técnica precisa para la cuadrilla y un mensaje claro para el ciudadano.
+
+REGLAS CRÍTICAS DE CLASIFICACIÓN EN CDMX:
+- BACHE / SOCAVÓN vs FUGA DE AGUA:
+  * Si la imagen muestra asfalto fracturado, hundimientos, hoyos, escombros, cascajo, tierra o grava expuesta en el pavimento, clasifícalo como 'Mantenimiento a la Carpeta Asfáltica (Bacheo)' para la Alcaldía (calles locales) o SOBSE (vías primarias).
+  * La presencia de coladeras, alcantarillas o rejillas pluviales cercanas NO significa fuga de agua.
+  * Para clasificar como 'Agua Potable y Drenaje / Fuga de Agua' (SACMEX), DEBE haber evidencia visible de agua activa, encharcamiento abundante o flujo continuo de agua brotando de una tubería.
+
 Devuelve el resultado estrictamente estructurado según el esquema JSON solicitado."""
 
 SAMPLE_REPORTS = [
@@ -192,45 +199,64 @@ def analyze_image_with_ai(image: Image.Image) -> SUACReport:
         image.save(buffered, format="JPEG")
         image_bytes = buffered.getvalue()
 
-        # Modelo multimodal recomendado para la API de Gemini
-        model_name = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
+        # Lista de modelos con fallback automático ante picos de demanda (503)
+        preferred_model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
+        candidate_models = [
+            preferred_model,
+            "gemini-3.5-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-3.8-flash",
+            "gemini-3.1-flash-lite",
+        ]
+        # Deduplicar preservando el orden
+        candidate_models = list(dict.fromkeys(candidate_models))
         
         prompt = (
             "Analiza detalladamente esta fotografía tomada en una calle de la Ciudad de México. "
             "Detecta la falla urbana visible, su gravedad, la dependencia competente y genera el reporte formal para el SUAC."
         )
 
-        response = client.models.generate_content(
-            model=model_name,
-            contents=[
-                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
-                prompt
-            ],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=SUACReport,
-                system_instruction=SYSTEM_PROMPT,
-                temperature=0.2,
-            )
-        )
+        last_err = None
+        for model_name in candidate_models:
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[
+                        types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
+                        prompt
+                    ],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=SUACReport,
+                        system_instruction=SYSTEM_PROMPT,
+                        temperature=0.2,
+                    )
+                )
 
-        report_dict = json.loads(response.text)
-        if not report_dict.get("folio_simulado"):
-            report_dict["folio_simulado"] = generate_folio()
-        return SUACReport(**report_dict)
+                report_dict = json.loads(response.text)
+                if not report_dict.get("folio_simulado"):
+                    report_dict["folio_simulado"] = generate_folio()
+                return SUACReport(**report_dict)
+
+            except Exception as model_err:
+                last_err = model_err
+                console.print(f"[yellow]Aviso: Modelo {model_name} no disponible ({model_err}). Probando siguiente...[/yellow]")
+                continue
+
+        raise last_err or RuntimeError("Ningún modelo multimodal estuvo disponible.")
 
     except Exception as e:
         console.print(f"[red]Error al contactar la API de Gemini: {e}. Usando catálogo fallback.[/red]")
-        template = SAMPLE_REPORTS[0]
+        template = random.choice(SAMPLE_REPORTS)
         folio = generate_folio()
         return SUACReport(
-            folio_simulado=folio,
+            folio_simulado=f"{folio}-FALLBACK",
             categoria_suac=template["categoria_suac"],
-            subcategoria=template["subcategoria"],
+            subcategoria=f"{template['subcategoria']} (Aviso: Modo sin conexión)",
             dependencia_responsable=template["dependencia_responsable"],
             prioridad=template["prioridad"],
             evaluacion_riesgo=template["evaluacion_riesgo"],
-            descripcion_tecnica=template["descripcion_tecnica"],
+            descripcion_tecnica=f"Nota de sistema: {e}. {template['descripcion_tecnica']}",
             accion_inmediata_cuadrilla=template["accion_inmediata_cuadrilla"],
             tiempo_estimado_atencion=template["tiempo_estimado_atencion"],
             notificacion_ciudadano_whatsapp=template["notificacion_ciudadano_whatsapp"].format(folio=folio),
